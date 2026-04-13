@@ -103,6 +103,49 @@ firebase apphosting:secrets:set GOOGLE_GENERATIVE_AI_API_KEY
 
 After backend creation, connect the GitHub repo and set the live branch in Firebase App Hosting.
 
+## Netlify deployment prep
+
+This repo now includes [netlify.toml](/Users/shivanshmundra/Downloads/Summariser_bot/netlify.toml) for a Netlify deployment path.
+
+Important deployment notes:
+
+- the current hosted-safe default should be `MEET_BOT_MODE=mock`
+- runtime storage must use a writable temp directory through `DATA_ROOT`
+- environment variables for the Next.js server functions should be set in the Netlify dashboard
+
+Recommended Netlify environment variables:
+
+- `AUTH_SECRET`
+- `GOOGLE_GENERATIVE_AI_API_KEY`
+- `DATA_ROOT=/tmp/meet-ai-scribe`
+- `MEET_BOT_MODE=mock`
+
+Optional if you later host the real bot flow elsewhere:
+
+- `MEET_BOT_NAME`
+- `MEET_BOT_HEADLESS`
+- `MEET_ALLOW_MANUAL_LOGIN`
+- `MEET_MANUAL_LOGIN_TIMEOUT_MS`
+- `MEET_FIRST_CAPTION_TIMEOUT_MS`
+- `MEET_CAPTION_CAPTURE_MS`
+- `MEET_CAPTION_POLL_MS`
+- `MEET_CAPTION_IDLE_TIMEOUT_MS`
+- `GOOGLE_ACCOUNT_EMAIL`
+- `GOOGLE_ACCOUNT_PASSWORD`
+- `GOOGLE_ACCOUNT_STORAGE_STATE_PATH`
+- `CHROME_EXECUTABLE_PATH`
+
+Suggested Netlify deploy steps:
+
+1. Push this repo to GitHub.
+2. In Netlify, select **Add new site** -> **Import an existing project**.
+3. Connect the GitHub repo.
+4. Netlify should detect the Next.js app automatically.
+5. Before the first deploy, add the environment variables listed above in the Netlify UI.
+6. Trigger the deploy.
+
+For the first public deployment, keep the app in `mock` mode. After that works, move durable storage and the real Playwright Meet bot to separate cloud services before enabling the full bot flow in production.
+
 ## Auth flow
 
 - sign up with name, email, and password
