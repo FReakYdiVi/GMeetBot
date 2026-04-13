@@ -1,0 +1,29 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 1024
+  concurrency: 20
+  minInstances: 0
+  maxInstances: 2
+
+env:
+  - variable: NODE_ENV
+    value: production
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: DATA_ROOT
+    value: /tmp/meet-ai-scribe
+    availability:
+      - RUNTIME
+
+  - variable: MEET_BOT_MODE
+    value: mock
+    availability:
+      - RUNTIME
+
+  - variable: AUTH_SECRET
+    secret: AUTH_SECRET
+
+  - variable: GOOGLE_GENERATIVE_AI_API_KEY
+    secret: GOOGLE_GENERATIVE_AI_API_KEY
