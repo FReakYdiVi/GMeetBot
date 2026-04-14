@@ -28,7 +28,10 @@ function persistSession(session: MeetingSession) {
     artifactType: "session",
     sessionId: session.id,
     ownerId: session.ownerId,
-  }).catch(() => null);
+  }).catch((error) => {
+    console.error(`[cloud-storage] Failed to mirror sessions/${session.id}.json`, error);
+    return null;
+  });
   persistSessionRag(session);
 }
 

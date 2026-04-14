@@ -9,6 +9,7 @@ type JsonValue =
   | { [key: string]: JsonValue };
 
 let cachedClient: S3Client | null | undefined;
+let loggedAwsConfig = false;
 
 function readEnv(...keys: string[]) {
   for (const key of keys) {
@@ -78,6 +79,16 @@ export function isAwsS3Enabled() {
   return Boolean(getS3Client() && getBucketName() && getRegion());
 }
 
+export function getAwsS3ConfigStatus() {
+  return {
+    region: Boolean(getRegion()),
+    bucket: Boolean(getBucketName()),
+    accessKeyId: Boolean(getAccessKeyId()),
+    secretAccessKey: Boolean(getSecretAccessKey()),
+    sessionToken: Boolean(getSessionToken()),
+  };
+}
+
 export async function uploadJsonToS3(
   relativePath: string,
   payload: JsonValue,
@@ -91,6 +102,16 @@ export async function uploadJsonToS3(
   }
 
   const key = `${getObjectPrefix().replace(/\/+$/, "")}/${relativePath.replace(/^\/+/, "")}`;
+
+  if (!loggedAwsConfig) {
+    loggedAwsConfig = true;
+    console.info("[cloud-storage] AWS S3 upload enabled", {
+      bucket,
+      region: getRegion(),
+      prefix: getObjectPrefix(),
+      hasSessionToken: Boolean(getSessionToken()),
+    });
+  }
 
   await client.send(
     new PutObjectCommand({

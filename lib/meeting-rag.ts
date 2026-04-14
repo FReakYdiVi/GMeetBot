@@ -347,7 +347,10 @@ function persistRagIndex(index: SessionRagIndex) {
     artifactType: "rag",
     sessionId: index.sessionId,
     strategyVersion: index.strategyVersion,
-  }).catch(() => null);
+  }).catch((error) => {
+    console.error(`[cloud-storage] Failed to mirror rag/${index.sessionId}.json`, error);
+    return null;
+  });
 }
 
 export function persistSessionRag(session: MeetingSession) {

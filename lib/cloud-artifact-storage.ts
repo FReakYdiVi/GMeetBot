@@ -1,4 +1,4 @@
-import { isAwsS3Enabled, uploadJsonToS3 } from "@/lib/aws-storage";
+import { getAwsS3ConfigStatus, isAwsS3Enabled, uploadJsonToS3 } from "@/lib/aws-storage";
 import { isGcpStorageEnabled, uploadJsonToGcs } from "@/lib/gcp-storage";
 
 type JsonValue =
@@ -21,6 +21,8 @@ export function getConfiguredCloudStorageProvider() {
   return null;
 }
 
+let warnedNoCloudStorage = false;
+
 export async function uploadJsonArtifact(
   relativePath: string,
   payload: JsonValue,
@@ -32,6 +34,14 @@ export async function uploadJsonArtifact(
 
   if (isGcpStorageEnabled()) {
     return uploadJsonToGcs(relativePath, payload, metadata);
+  }
+
+  if (!warnedNoCloudStorage) {
+    warnedNoCloudStorage = true;
+    console.warn("[cloud-storage] No cloud storage provider configured. Skipping artifact upload.", {
+      aws: getAwsS3ConfigStatus(),
+      gcpConfigured: isGcpStorageEnabled(),
+    });
   }
 
   return null;

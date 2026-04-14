@@ -42,7 +42,10 @@ function writeUsers(users: StoredUser[]) {
   writeFileSync(USERS_FILE_PATH, JSON.stringify(users, null, 2), "utf8");
   void uploadJsonArtifact("users/users.json", users, {
     artifactType: "users",
-  }).catch(() => null);
+  }).catch((error) => {
+    console.error("[cloud-storage] Failed to mirror users/users.json", error);
+    return null;
+  });
 }
 
 function getAuthSecret() {
