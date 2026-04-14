@@ -402,18 +402,22 @@ async function embedTextWithGemini(
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
+        model: "models/gemini-embedding-001",
         content: {
           parts: [{ text }],
         },
         taskType,
-        title,
-        outputDimensionality: EMBEDDING_DIMENSION,
+        title: taskType === "RETRIEVAL_DOCUMENT" ? title : undefined,
+        output_dimensionality: EMBEDDING_DIMENSION,
       }),
     },
   );
 
   if (!response.ok) {
-    throw new Error(`Gemini embedding request failed with status ${response.status}.`);
+    const details = await response.text().catch(() => "");
+    throw new Error(
+      `Gemini embedding request failed with status ${response.status}.${details ? ` ${details}` : ""}`,
+    );
   }
 
   const payload = (await response.json()) as {
@@ -548,7 +552,9 @@ export async function retrieveRelevantContext(
 ): Promise<RetrievedContext> {
   const route = routeMeetingQuery(session, query);
   const index = await ensureSessionRagIndex(session);
-  const queryEmbedding = await embedTextWithGemini(query, queryTaskType(route), session.title);
+  const queryEmbedding = await embedTextWithGemini(query, queryTaskType(route), session.title).catch(
+    () => null,
+  );
   const routedChunks = index.chunks.filter((chunk) => matchesRoute(chunk, route));
   const candidateChunks = routedChunks.length ? routedChunks : index.chunks;
   const bm25Scores = computeBm25Scores(candidateChunks, query);
