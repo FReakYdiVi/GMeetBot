@@ -11,40 +11,52 @@ type JsonValue =
 let cachedClient: S3Client | null | undefined;
 let loggedAwsConfig = false;
 
-function readEnv(...keys: string[]) {
-  for (const key of keys) {
-    const value = process.env[key]?.trim();
+function hasAnyS3ScopedEnv() {
+  return Boolean(
+    process.env.S3_REGION?.trim() ||
+      process.env.S3_BUCKET?.trim() ||
+      process.env.S3_ACCESS_KEY_ID?.trim() ||
+      process.env.S3_SECRET_ACCESS_KEY?.trim() ||
+      process.env.S3_SESSION_TOKEN?.trim(),
+  );
+}
 
-    if (value) {
-      return value;
-    }
+function readAwsEnv(s3Key: string, awsKey: string) {
+  const s3ScopedValue = process.env[s3Key]?.trim();
+
+  if (s3ScopedValue) {
+    return s3ScopedValue;
   }
 
-  return "";
+  if (hasAnyS3ScopedEnv()) {
+    return "";
+  }
+
+  return process.env[awsKey]?.trim() || "";
 }
 
 function getBucketName() {
-  return readEnv("S3_BUCKET", "AWS_S3_BUCKET");
+  return readAwsEnv("S3_BUCKET", "AWS_S3_BUCKET");
 }
 
 function getRegion() {
-  return readEnv("S3_REGION", "AWS_REGION");
+  return readAwsEnv("S3_REGION", "AWS_REGION");
 }
 
 function getObjectPrefix() {
-  return readEnv("S3_PREFIX", "AWS_S3_PREFIX") || "meet-ai-scribe";
+  return readAwsEnv("S3_PREFIX", "AWS_S3_PREFIX") || "meet-ai-scribe";
 }
 
 function getAccessKeyId() {
-  return readEnv("S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID");
+  return readAwsEnv("S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID");
 }
 
 function getSecretAccessKey() {
-  return readEnv("S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY");
+  return readAwsEnv("S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY");
 }
 
 function getSessionToken() {
-  return readEnv("S3_SESSION_TOKEN", "AWS_SESSION_TOKEN");
+  return readAwsEnv("S3_SESSION_TOKEN", "AWS_SESSION_TOKEN");
 }
 
 function getS3Client() {
