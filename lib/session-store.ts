@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { uploadJsonArtifact } from "@/lib/cloud-artifact-storage";
 import { getDataPath } from "@/lib/data-root";
 import { persistSessionRag } from "@/lib/meeting-rag";
 import type { MeetingSession, MeetingSummary, SessionStatus, TranscriptEntry } from "@/lib/types";
@@ -23,6 +24,11 @@ function getSessionPath(sessionId: string) {
 function persistSession(session: MeetingSession) {
   ensureSessionStorageDir();
   writeFileSync(getSessionPath(session.id), JSON.stringify(session, null, 2), "utf8");
+  void uploadJsonArtifact(`sessions/${session.id}.json`, session, {
+    artifactType: "session",
+    sessionId: session.id,
+    ownerId: session.ownerId,
+  }).catch(() => null);
   persistSessionRag(session);
 }
 

@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { uploadJsonArtifact } from "@/lib/cloud-artifact-storage";
 import { getDataPath } from "@/lib/data-root";
 import type {
   MeetingQueryIntent,
@@ -342,6 +343,11 @@ function buildContextualChunks(session: MeetingSession) {
 function persistRagIndex(index: SessionRagIndex) {
   ensureRagDir();
   writeFileSync(getRagPath(index.sessionId), JSON.stringify(index, null, 2), "utf8");
+  void uploadJsonArtifact(`rag/${index.sessionId}.json`, index, {
+    artifactType: "rag",
+    sessionId: index.sessionId,
+    strategyVersion: index.strategyVersion,
+  }).catch(() => null);
 }
 
 export function persistSessionRag(session: MeetingSession) {

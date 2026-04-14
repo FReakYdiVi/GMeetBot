@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHmac } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cookies } from "next/headers";
+import { uploadJsonArtifact } from "@/lib/cloud-artifact-storage";
 import { getDataPath, getDataRoot } from "@/lib/data-root";
 import type { AuthUser } from "@/lib/types";
 
@@ -39,6 +40,9 @@ function readUsers() {
 function writeUsers(users: StoredUser[]) {
   ensureDataDir();
   writeFileSync(USERS_FILE_PATH, JSON.stringify(users, null, 2), "utf8");
+  void uploadJsonArtifact("users/users.json", users, {
+    artifactType: "users",
+  }).catch(() => null);
 }
 
 function getAuthSecret() {

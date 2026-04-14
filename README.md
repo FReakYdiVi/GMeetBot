@@ -146,6 +146,61 @@ Suggested Netlify deploy steps:
 
 For the first public deployment, keep the app in `mock` mode. After that works, move durable storage and the real Playwright Meet bot to separate cloud services before enabling the full bot flow in production.
 
+## GCP Cloud Storage prep
+
+The repo is now prepared to mirror local runtime artifacts into Google Cloud Storage using the official Node.js client.
+
+Supported GCS env vars:
+
+- `GCP_PROJECT_ID`
+- `GCP_STORAGE_BUCKET`
+- `GCP_STORAGE_PREFIX`
+- `GCP_SERVICE_ACCOUNT_KEY_JSON`
+- `GCP_SERVICE_ACCOUNT_KEY_BASE64`
+
+What gets mirrored when GCS is configured:
+
+- `users/users.json`
+- `sessions/<session-id>.json`
+- `rag/<session-id>.json`
+
+Recommended production env values:
+
+- `GCP_STORAGE_BUCKET=your-bucket-name`
+- `GCP_STORAGE_PREFIX=meet-ai-scribe`
+- `GCP_SERVICE_ACCOUNT_KEY_BASE64=<base64-encoded-service-account-json>`
+
+Local storage still works as a fallback, so the app remains usable even if GCS credentials are not present yet.
+
+## AWS S3 prep
+
+The repo is also prepared to mirror runtime artifacts into AWS S3. If both AWS and GCP credentials are present, AWS S3 is used first.
+
+Supported AWS env vars:
+
+- `S3_REGION`
+- `S3_BUCKET`
+- `S3_PREFIX`
+- `S3_ACCESS_KEY_ID`
+- `S3_SECRET_ACCESS_KEY`
+- `S3_SESSION_TOKEN`
+
+What gets mirrored when S3 is configured:
+
+- `users/users.json`
+- `sessions/<session-id>.json`
+- `rag/<session-id>.json`
+
+Recommended production env values:
+
+- `S3_REGION=ap-south-1`
+- `S3_BUCKET=your-bucket-name`
+- `S3_PREFIX=meet-ai-scribe`
+
+Netlify reserves AWS runtime variable names like `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`, so the app uses the `S3_*` names above for deployment environments. The code still accepts the AWS-native names as a local fallback.
+
+If you only want one cloud provider configured, just set the `S3_*` env vars and leave the GCP env vars empty.
+
 ## Auth flow
 
 - sign up with name, email, and password
