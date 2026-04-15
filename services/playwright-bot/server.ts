@@ -124,6 +124,6 @@ const server = createServer(async (request, response) => {
   sendJson(response, 404, { error: "Not found" });
 });
 
-server.listen(getPort(), () => {
-  console.log(`[playwright-bot] listening on port ${getPort()}`);
+server.listen(getPort(), "0.0.0.0", () => {
+  console.log(`[playwright-bot] listening on 0.0.0.0:${getPort()}`);
 });
