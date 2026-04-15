@@ -21,6 +21,41 @@ function getRemoteBotServiceToken() {
   return process.env.PLAYWRIGHT_BOT_SERVICE_TOKEN?.trim() || "";
 }
 
+function getRemoteBotHealthUrl(remoteBotServiceUrl: string) {
+  return `${remoteBotServiceUrl.replace(/\/+$/, "")}/health`;
+}
+
+function getRemoteBotCaptureUrl(remoteBotServiceUrl: string) {
+  return `${remoteBotServiceUrl.replace(/\/+$/, "")}/capture`;
+}
+
+function getRemoteBotRetryCount() {
+  const parsed = Number(process.env.PLAYWRIGHT_BOT_RETRY_COUNT ?? "3");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+}
+
+async function warmRemoteBotService(sessionId: string, remoteBotServiceUrl: string) {
+  try {
+    const response = await fetch(getRemoteBotHealthUrl(remoteBotServiceUrl), {
+      method: "GET",
+      headers: {
+        ...(getRemoteBotServiceToken()
+          ? { Authorization: `Bearer ${getRemoteBotServiceToken()}` }
+          : {}),
+      },
+    });
+
+    appendDebugLog(
+      sessionId,
+      `Remote bot health check returned ${response.status}.`,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown remote bot health error.";
+    appendDebugLog(sessionId, `Remote bot health check failed: ${message}`);
+  }
+}
+
 function markCaptionCaptured(sessionId: string) {
   const session = getSession(sessionId);
 
@@ -81,27 +116,47 @@ async function captureMeetCaptions(sessionId: string) {
 
   if (remoteBotServiceUrl) {
     appendDebugLog(sessionId, "Using remote Playwright bot service.");
+    await warmRemoteBotService(sessionId, remoteBotServiceUrl);
 
-    let response: Response;
+    let response: Response | null = null;
+    let lastFetchError: string | null = null;
+    const retryCount = getRemoteBotRetryCount();
 
-    try {
-      response = await fetch(`${remoteBotServiceUrl.replace(/\/+$/, "")}/capture`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(getRemoteBotServiceToken()
-            ? { Authorization: `Bearer ${getRemoteBotServiceToken()}` }
-            : {}),
-        },
-        body: JSON.stringify({
-          meetUrl: session.meetUrl,
-        }),
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown remote bot fetch error.";
+    for (let attempt = 1; attempt <= retryCount; attempt += 1) {
+      appendDebugLog(sessionId, `Calling remote bot capture endpoint (attempt ${attempt}/${retryCount}).`);
+
+      try {
+        response = await fetch(getRemoteBotCaptureUrl(remoteBotServiceUrl), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(getRemoteBotServiceToken()
+              ? { Authorization: `Bearer ${getRemoteBotServiceToken()}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            meetUrl: session.meetUrl,
+          }),
+        });
+        break;
+      } catch (error) {
+        lastFetchError =
+          error instanceof Error ? error.message : "Unknown remote bot fetch error.";
+        appendDebugLog(
+          sessionId,
+          `Remote bot request failed on attempt ${attempt}/${retryCount}: ${lastFetchError}`,
+        );
+
+        if (attempt < retryCount) {
+          await wait(4_000);
+          await warmRemoteBotService(sessionId, remoteBotServiceUrl);
+        }
+      }
+    }
+
+    if (!response) {
       throw new Error(
-        `Could not reach the remote Playwright bot service at ${remoteBotServiceUrl}. ${message}`,
+        `Could not reach the remote Playwright bot service at ${remoteBotServiceUrl}. ${lastFetchError ?? "The service did not respond."}`,
       );
     }
 
@@ -113,7 +168,13 @@ async function captureMeetCaptions(sessionId: string) {
     };
 
     if (!response.ok || payload.ok === false) {
-      throw new Error(payload.error || `Remote Playwright bot failed with status ${response.status}.`);
+      for (const message of payload.debugLog ?? []) {
+        appendDebugLog(sessionId, `[remote-bot] ${message}`);
+      }
+
+      throw new Error(
+        payload.error || `Remote Playwright bot failed with status ${response.status}.`,
+      );
     }
 
     for (const message of payload.debugLog ?? []) {
