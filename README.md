@@ -398,6 +398,7 @@ This repo includes a dedicated Playwright bot service for Render:
 
 Service endpoints:
 
+- `GET /`
 - `GET /health`
 - `POST /capture`
 
@@ -432,6 +433,7 @@ How to use it:
    - `GOOGLE_ACCOUNT_STORAGE_STATE_BASE64`
    - `GOOGLE_ACCOUNT_STORAGE_STATE_PATH=/tmp/google-meet.json`
    - optionally `PLAYWRIGHT_BOT_SERVICE_TOKEN`
+   - set the Render health check path to `/health`
 3. Add `PLAYWRIGHT_BOT_SERVICE_URL` to Netlify and point it to the Render service URL.
 4. Keep `MEET_BOT_MODE=captions` in the Netlify app only when the remote bot is ready.
 

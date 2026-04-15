@@ -5,6 +5,7 @@ services:
     dockerfilePath: ./Dockerfile.playwright-bot
     plan: free
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: PORT
         value: 3001

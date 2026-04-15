@@ -69,7 +69,7 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.url === "/health" && request.method === "GET") {
+  if ((request.url === "/" || request.url === "/health") && request.method === "GET") {
     sendJson(response, 200, {
       ok: true,
       service: "playwright-bot",
