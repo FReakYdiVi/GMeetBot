@@ -1,0 +1,17 @@
+FROM mcr.microsoft.com/playwright:v1.59.1-noble
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY tsconfig.json ./
+COPY lib ./lib
+COPY services ./services
+
+EXPOSE 3001
+
+CMD ["npm", "run", "bot:serve"]

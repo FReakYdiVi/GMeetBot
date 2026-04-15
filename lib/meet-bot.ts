@@ -13,6 +13,14 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getRemoteBotServiceUrl() {
+  return process.env.PLAYWRIGHT_BOT_SERVICE_URL?.trim() || "";
+}
+
+function getRemoteBotServiceToken() {
+  return process.env.PLAYWRIGHT_BOT_SERVICE_TOKEN?.trim() || "";
+}
+
 async function captureMockTranscript(sessionId: string) {
   const transcript = [
     {
@@ -55,6 +63,47 @@ async function captureMeetCaptions(sessionId: string) {
   }
 
   appendDebugLog(sessionId, "Starting real Meet caption capture.");
+
+  const remoteBotServiceUrl = getRemoteBotServiceUrl();
+
+  if (remoteBotServiceUrl) {
+    appendDebugLog(sessionId, "Using remote Playwright bot service.");
+
+    const response = await fetch(`${remoteBotServiceUrl.replace(/\/+$/, "")}/capture`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(getRemoteBotServiceToken()
+          ? { Authorization: `Bearer ${getRemoteBotServiceToken()}` }
+          : {}),
+      },
+      body: JSON.stringify({
+        meetUrl: session.meetUrl,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      captions?: Array<{ speaker: string; text: string }>;
+      debugLog?: string[];
+      error?: string;
+    };
+
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || `Remote Playwright bot failed with status ${response.status}.`);
+    }
+
+    for (const message of payload.debugLog ?? []) {
+      appendDebugLog(sessionId, `[remote-bot] ${message}`);
+    }
+
+    for (const caption of payload.captions ?? []) {
+      appendTranscriptEntry(sessionId, caption);
+      appendDebugLog(sessionId, `Captured caption from ${caption.speaker}: ${caption.text}`);
+    }
+
+    return;
+  }
 
   await captureGoogleMeetCaptions(
     session.meetUrl,
