@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: meet-ai-scribe-frontend
+    runtime: node
+    plan: free
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATA_ROOT
+        value: /tmp/meet-ai-scribe
+      - key: MEET_BOT_MODE
+        value: mock

@@ -446,6 +446,40 @@ To bootstrap an already authenticated Google session into Render:
 
 At startup, the bot service automatically recreates the Playwright storage-state file from the secret so the remote bot can reuse your saved Google auth state.
 
+### Render frontend service
+
+The frontend Next.js app can also be deployed to Render as a standard Node web service.
+
+- frontend blueprint: [render.frontend.yaml](/Users/shivanshmundra/Downloads/Summariser_bot/render.frontend.yaml)
+- bot blueprint: [render.playwright-bot.yaml](/Users/shivanshmundra/Downloads/Summariser_bot/render.playwright-bot.yaml)
+
+Recommended frontend settings:
+
+- runtime: `Node`
+- build command: `npm ci && npm run build`
+- start command: `npm run start`
+- health check path: `/`
+
+Recommended frontend env vars on Render:
+
+- `AUTH_SECRET`
+- `GOOGLE_GENERATIVE_AI_API_KEY`
+- `DATA_ROOT=/tmp/meet-ai-scribe`
+- `MEET_BOT_MODE=mock` for a safe first deploy
+- `S3_REGION`
+- `S3_BUCKET`
+- `S3_PREFIX`
+- `S3_ACCESS_KEY_ID`
+- `S3_SECRET_ACCESS_KEY`
+- optionally `PLAYWRIGHT_BOT_SERVICE_URL`
+- optionally `PLAYWRIGHT_BOT_SERVICE_TOKEN`
+
+Once the frontend is healthy on Render:
+
+1. point `PLAYWRIGHT_BOT_SERVICE_URL` at the Render bot service
+2. switch `MEET_BOT_MODE=captions`
+3. redeploy the frontend
+
 ## API overview
 
 Main routes:
