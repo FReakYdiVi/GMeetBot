@@ -324,6 +324,8 @@ PLAYWRIGHT_BOT_SERVICE_URL=
 PLAYWRIGHT_BOT_SERVICE_TOKEN=
 GOOGLE_ACCOUNT_EMAIL=
 GOOGLE_ACCOUNT_PASSWORD=
+GOOGLE_ACCOUNT_STORAGE_STATE_JSON=
+GOOGLE_ACCOUNT_STORAGE_STATE_BASE64=
 GOOGLE_ACCOUNT_STORAGE_STATE_PATH=playwright/.auth/google-meet.json
 CHROME_EXECUTABLE_PATH=
 ```
@@ -427,12 +429,22 @@ How to use it:
    - `MEET_CAPTION_IDLE_TIMEOUT_MS`
    - `GOOGLE_ACCOUNT_EMAIL`
    - `GOOGLE_ACCOUNT_PASSWORD`
+   - `GOOGLE_ACCOUNT_STORAGE_STATE_BASE64`
    - `GOOGLE_ACCOUNT_STORAGE_STATE_PATH=/tmp/google-meet.json`
    - optionally `PLAYWRIGHT_BOT_SERVICE_TOKEN`
 3. Add `PLAYWRIGHT_BOT_SERVICE_URL` to Netlify and point it to the Render service URL.
 4. Keep `MEET_BOT_MODE=captions` in the Netlify app only when the remote bot is ready.
 
 When `PLAYWRIGHT_BOT_SERVICE_URL` is set, the app sends Meet capture to the remote Render bot service instead of launching Playwright inside the Netlify runtime.
+
+To bootstrap an already authenticated Google session into Render:
+
+1. Sign in locally once until [google-meet.json](/Users/shivanshmundra/Downloads/Summariser_bot/playwright/.auth/google-meet.json) is created.
+2. Base64-encode that file.
+3. Store the encoded value in Render as `GOOGLE_ACCOUNT_STORAGE_STATE_BASE64`.
+4. Set `GOOGLE_ACCOUNT_STORAGE_STATE_PATH=/tmp/google-meet.json`.
+
+At startup, the bot service automatically recreates the Playwright storage-state file from the secret so the remote bot can reuse your saved Google auth state.
 
 ## API overview
 

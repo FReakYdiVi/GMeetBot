@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { bootstrapGoogleAccountStorageState } from "@/lib/google-auth-state";
 import { chromium, type BrowserContext, type Locator, type Page } from "playwright";
 
 type CapturedCaption = {
@@ -772,13 +773,21 @@ export async function captureGoogleMeetCaptions(
   onDebug?: (message: string) => void | Promise<void>,
 ) {
   const config = getGoogleMeetBotConfig();
-  const context = await buildContext(config);
-  const page = await context.newPage();
   const debug = async (message: string) => {
     if (onDebug) {
       await onDebug(message);
     }
   };
+  const bootstrapResult = bootstrapGoogleAccountStorageState();
+
+  if (bootstrapResult.bootstrapped) {
+    await debug(`Bootstrapped Google auth storage state at ${bootstrapResult.path}.`);
+  } else if (bootstrapResult.reason === "already-current") {
+    await debug(`Using existing Google auth storage state at ${bootstrapResult.path}.`);
+  }
+
+  const context = await buildContext(config);
+  const page = await context.newPage();
 
   async function inspectCaptionSurface() {
     return page.evaluate(() => {
