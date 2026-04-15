@@ -78,10 +78,69 @@ Start session
              |                                           |
              v                                           v
    +---------------------+                    +------------------------+
-   | AWS S3 / GCP mirror |                    | Summary + RAG artifacts|
-   | users/sessions/rag  |                    | transcript + embeddings|
+   | AWS S3 / GCP mirror |                    | Remote bot runtime     |
+   | users/sessions/rag  |                    | AWS EC2 + Chromium     |
    +---------------------+                    +------------------------+
 ```
+
+## Final backend architecture
+
+The final production-style setup is split into two parts:
+
+- **Frontend + app API**
+  - public Next.js application
+  - user auth
+  - session history
+  - summary generation
+  - chatbot
+  - exports
+- **Remote Playwright bot service**
+  - runs separately on an AWS EC2 Ubuntu server
+  - launches Chromium with Playwright
+  - joins Google Meet
+  - enables captions
+  - captures transcript chunks
+  - returns caption data to the main app
+
+Final deployed flow:
+
+```text
+User opens hosted frontend
+        |
+        v
+Frontend creates session in Next.js app
+        |
+        v
+Next.js app calls remote Playwright bot service
+        |
+        v
+AWS EC2 bot joins Google Meet and captures captions
+        |
+        v
+Transcript returns to app API
+        |
+        v
+Gemini summary + RAG generation
+        |
+        v
+Artifacts stored locally and mirrored to AWS S3
+```
+
+### Why the backend was split
+
+The project originally supported local Playwright execution directly from the app server. That worked well during development, but browser automation against Google Meet is much more reliable on a dedicated machine than on lightweight frontend/serverless hosting.
+
+This split backend architecture was chosen because:
+
+- Playwright + Chromium need a stable long-running runtime
+- Google Meet automation is sensitive to login state, media setup, and timing
+- a dedicated EC2 server gives better control over browser dependencies and auth state
+- the public app host stays lightweight and stable
+
+In short:
+
+- **frontend host** = UI, summaries, chatbot, storage orchestration
+- **EC2 bot host** = browser automation and caption capture
 
 ## Main features
 
@@ -295,6 +354,35 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+### Local setup for the real Meet bot
+
+For local real-caption testing, use:
+
+```env
+MEET_BOT_MODE=captions
+MEET_BOT_HEADLESS=false
+MEET_ALLOW_MANUAL_LOGIN=true
+GOOGLE_ACCOUNT_EMAIL=
+GOOGLE_ACCOUNT_PASSWORD=
+GOOGLE_ACCOUNT_STORAGE_STATE_PATH=playwright/.auth/google-meet.json
+```
+
+Why this setup is recommended locally:
+
+- `MEET_BOT_HEADLESS=false` lets you watch the browser and debug sign-in/join flow
+- `MEET_ALLOW_MANUAL_LOGIN=true` makes the first Google sign-in much easier
+- the saved Playwright auth state can then be reused later
+
+Typical local real-bot flow:
+
+1. run `npm run dev`
+2. open the app locally
+3. paste a real Google Meet link
+4. complete first-time Google sign-in if needed
+5. admit the bot
+6. speak after captions are enabled
+7. confirm transcript, summary, and chatbot flow
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` and fill in what you need.
@@ -388,7 +476,95 @@ firebase apphosting:secrets:set AUTH_SECRET
 firebase apphosting:secrets:set GOOGLE_GENERATIVE_AI_API_KEY
 ```
 
+### AWS EC2 Playwright bot service
+
+This is the recommended real-bot deployment path for the final solution.
+
+Run the remote bot service from:
+
+- service entrypoint: `services/playwright-bot/server.ts`
+- local/VM command: `npm run bot:serve`
+
+Recommended EC2 shape:
+
+- Ubuntu server
+- Node.js 20
+- Playwright Chromium installed
+- bot process managed by `pm2`
+
+Recommended EC2 bot environment:
+
+```env
+PORT=3001
+MEET_BOT_HEADLESS=true
+MEET_BOT_NAME="Meet AI Scribe"
+MEET_ALLOW_MANUAL_LOGIN=false
+MEET_FIRST_CAPTION_TIMEOUT_MS=60000
+MEET_CAPTION_CAPTURE_MS=600000
+MEET_CAPTION_POLL_MS=1500
+MEET_CAPTION_IDLE_TIMEOUT_MS=120000
+
+GOOGLE_ACCOUNT_EMAIL=
+GOOGLE_ACCOUNT_PASSWORD=
+GOOGLE_ACCOUNT_STORAGE_STATE_BASE64=
+GOOGLE_ACCOUNT_STORAGE_STATE_PATH=/tmp/google-meet.json
+
+PLAYWRIGHT_BOT_SERVICE_TOKEN=
+```
+
+Recommended EC2 setup flow:
+
+1. Launch an Ubuntu EC2 instance.
+2. Open inbound SSH access from your IP.
+3. Open bot service access on port `3001`.
+4. Install Node 20, repo dependencies, and Playwright Chromium.
+5. Create `.env.bot`.
+6. Start the service with `npm run bot:serve`.
+7. Confirm `http://<EC2-IP>:3001/health` returns `200`.
+8. Move the bot process under `pm2`.
+9. Point the frontend to:
+   - `PLAYWRIGHT_BOT_SERVICE_URL=http://<EC2-IP>:3001`
+   - `PLAYWRIGHT_BOT_SERVICE_TOKEN=<same token>`
+10. Keep `MEET_BOT_MODE=captions` in the frontend app.
+
+Recommended split architecture:
+
+```text
+Hosted frontend + Next.js app
+        |
+        v
+PLAYWRIGHT_BOT_SERVICE_URL
+        |
+        v
+AWS EC2 Playwright bot service
+        |
+        v
+Google Meet automation + caption capture
+```
+
+### Why EC2 became the preferred bot backend
+
+During development, local Playwright execution was reliable, but lightweight managed web platforms were less stable for long-running Google Meet automation.
+
+EC2 was chosen because it provides:
+
+- full control over the Linux runtime
+- stable Chromium installation
+- easier handling of saved Google auth state
+- fewer platform-level cold start and browser-launch issues
+- a much better fit for long-running caption capture than frontend-oriented hosting
+
+Useful EC2 operations after setup:
+
+- start the bot with `npm run bot:serve`
+- keep it alive with `pm2`
+- inspect runtime logs with `pm2 logs meet-bot`
+- restart after updates with `pm2 restart meet-bot`
+- check service health at `http://<EC2-IP>:3001/health`
+
 ### Render Playwright bot service
+
+Render support is still included in the repo as an optional alternative.
 
 This repo includes a dedicated Playwright bot service for Render:
 
@@ -401,21 +577,6 @@ Service endpoints:
 - `GET /`
 - `GET /health`
 - `POST /capture`
-
-Recommended split architecture:
-
-```text
-Netlify frontend + API
-        |
-        v
-PLAYWRIGHT_BOT_SERVICE_URL
-        |
-        v
-Render Playwright bot service
-        |
-        v
-Google Meet automation + caption capture
-```
 
 How to use it:
 
@@ -434,8 +595,8 @@ How to use it:
    - `GOOGLE_ACCOUNT_STORAGE_STATE_PATH=/tmp/google-meet.json`
    - optionally `PLAYWRIGHT_BOT_SERVICE_TOKEN`
    - set the Render health check path to `/health`
-3. Add `PLAYWRIGHT_BOT_SERVICE_URL` to Netlify and point it to the Render service URL.
-4. Keep `MEET_BOT_MODE=captions` in the Netlify app only when the remote bot is ready.
+3. Add `PLAYWRIGHT_BOT_SERVICE_URL` to the frontend app and point it to the Render service URL.
+4. Keep `MEET_BOT_MODE=captions` in the frontend app only when the remote bot is ready.
 
 When `PLAYWRIGHT_BOT_SERVICE_URL` is set, the app sends Meet capture to the remote Render bot service instead of launching Playwright inside the Netlify runtime.
 
@@ -481,6 +642,20 @@ Once the frontend is healthy on Render:
 1. point `PLAYWRIGHT_BOT_SERVICE_URL` at the Render bot service
 2. switch `MEET_BOT_MODE=captions`
 3. redeploy the frontend
+
+### Final recommended deployment combination
+
+The cleanest final setup for this project is:
+
+- **Frontend app**: Netlify or Render
+- **Real Playwright bot**: AWS EC2
+- **Artifact storage**: AWS S3
+
+This gives:
+
+- a public app URL
+- a reliable dedicated browser runtime
+- persistent cloud storage for users, sessions, and RAG artifacts
 
 ## API overview
 
