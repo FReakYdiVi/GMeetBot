@@ -2,6 +2,8 @@ export type SessionStatus =
   | "queued"
   | "launching"
   | "joining"
+  | "caption_setup"
+  | "waiting_for_captions"
   | "capturing"
   | "summarizing"
   | "completed"

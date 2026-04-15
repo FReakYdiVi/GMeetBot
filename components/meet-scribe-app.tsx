@@ -45,6 +45,18 @@ const SUMMARY_SECTION_COPY = {
     "Only finalized choices, approvals, or rejections. Do not include loose suggestions.",
 } as const;
 
+const SESSION_STATUS_COPY: Record<string, string> = {
+  queued: "Waiting to start the bot pipeline.",
+  launching: "Starting the bot runtime.",
+  joining: "Opening Google Meet and moving through the join flow.",
+  caption_setup: "Inside the meeting flow and trying to enable live captions.",
+  waiting_for_captions: "Joined successfully, but no live speech has been captured yet.",
+  capturing: "Live caption chunks are being collected now.",
+  summarizing: "Transcript captured. Generating the meeting summary.",
+  completed: "Session finished successfully.",
+  failed: "The pipeline stopped because of an error.",
+};
+
 type MeetScribeAppProps = {
   currentUser: AuthUser;
 };
@@ -408,6 +420,7 @@ export function MeetScribeApp({ currentUser }: MeetScribeAppProps) {
                 <div className={sessionStatusClass}>
                   {toTitleCase(session.status)}
                 </div>
+                <p className="note">{SESSION_STATUS_COPY[session.status]}</p>
 
                 <div className="meta">
                   <div className="meta-item">

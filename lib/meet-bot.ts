@@ -21,6 +21,19 @@ function getRemoteBotServiceToken() {
   return process.env.PLAYWRIGHT_BOT_SERVICE_TOKEN?.trim() || "";
 }
 
+function markCaptionCaptured(sessionId: string) {
+  const session = getSession(sessionId);
+
+  if (!session) {
+    return;
+  }
+
+  if (session.status !== "capturing") {
+    updateSessionStatus(sessionId, "capturing");
+    appendDebugLog(sessionId, "Live caption stream detected. Switched to capturing mode.");
+  }
+}
+
 async function captureMockTranscript(sessionId: string) {
   const transcript = [
     {
@@ -69,18 +82,28 @@ async function captureMeetCaptions(sessionId: string) {
   if (remoteBotServiceUrl) {
     appendDebugLog(sessionId, "Using remote Playwright bot service.");
 
-    const response = await fetch(`${remoteBotServiceUrl.replace(/\/+$/, "")}/capture`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(getRemoteBotServiceToken()
-          ? { Authorization: `Bearer ${getRemoteBotServiceToken()}` }
-          : {}),
-      },
-      body: JSON.stringify({
-        meetUrl: session.meetUrl,
-      }),
-    });
+    let response: Response;
+
+    try {
+      response = await fetch(`${remoteBotServiceUrl.replace(/\/+$/, "")}/capture`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(getRemoteBotServiceToken()
+            ? { Authorization: `Bearer ${getRemoteBotServiceToken()}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          meetUrl: session.meetUrl,
+        }),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown remote bot fetch error.";
+      throw new Error(
+        `Could not reach the remote Playwright bot service at ${remoteBotServiceUrl}. ${message}`,
+      );
+    }
 
     const payload = (await response.json().catch(() => ({}))) as {
       ok?: boolean;
@@ -98,6 +121,7 @@ async function captureMeetCaptions(sessionId: string) {
     }
 
     for (const caption of payload.captions ?? []) {
+      markCaptionCaptured(sessionId);
       appendTranscriptEntry(sessionId, caption);
       appendDebugLog(sessionId, `Captured caption from ${caption.speaker}: ${caption.text}`);
     }
@@ -108,6 +132,7 @@ async function captureMeetCaptions(sessionId: string) {
   await captureGoogleMeetCaptions(
     session.meetUrl,
     async (caption) => {
+      markCaptionCaptured(sessionId);
       appendTranscriptEntry(sessionId, caption);
       appendDebugLog(sessionId, `Captured caption from ${caption.speaker}: ${caption.text}`);
     },
@@ -143,9 +168,15 @@ export async function runMeetingPipeline(sessionId: string) {
     appendDebugLog(sessionId, "Bot moving into join flow.");
     await wait(1600);
 
-    updateSessionStatus(sessionId, "capturing");
-    appendDebugLog(sessionId, "Bot entered capture stage.");
+    updateSessionStatus(sessionId, "caption_setup");
+    appendDebugLog(sessionId, "Bot is joining the call and enabling captions.");
     await captureTranscript(sessionId);
+
+    const sessionAfterCapture = getSession(sessionId);
+    if (sessionAfterCapture?.status === "caption_setup") {
+      updateSessionStatus(sessionId, "waiting_for_captions");
+      appendDebugLog(sessionId, "Bot finished join flow but no live captions were captured yet.");
+    }
 
     updateSessionStatus(sessionId, "summarizing");
     appendDebugLog(sessionId, "Generating summary from captured transcript.");
