@@ -583,205 +583,212 @@ async function enableCaptions(page: Page) {
 }
 
 async function attachCaptionCollector(page: Page) {
-  await page.evaluate(() => {
-    const ignoredPhrases = [
-      "ask to join",
-      "join now",
-      "turn on captions",
-      "turn off captions",
-      "present now",
-      "use companion mode",
-      "meeting details",
-      "raise hand",
-      "leave call",
-      "microphone",
-      "camera",
-    ];
+  await page.evaluate(`
+    (() => {
+      const ignoredPhrases = [
+        "ask to join",
+        "join now",
+        "turn on captions",
+        "turn off captions",
+        "present now",
+        "use companion mode",
+        "meeting details",
+        "raise hand",
+        "leave call",
+        "microphone",
+        "camera",
+      ];
 
-    const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
+      const normalize = function (value) {
+        return String(value || "").replace(/\\s+/g, " ").trim();
+      };
 
-    const isVisible = (element: Element) => {
-      const htmlElement = element as HTMLElement;
-      const rect = htmlElement.getBoundingClientRect();
-      const style = window.getComputedStyle(htmlElement);
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        style.display !== "none" &&
-        style.visibility !== "hidden"
-      );
-    };
+      const isVisible = function (element) {
+        const htmlElement = element;
+        const rect = htmlElement.getBoundingClientRect();
+        const style = window.getComputedStyle(htmlElement);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden"
+        );
+      };
 
-    const sanitizeCaptionText = (value: string) => {
-      let clean = normalize(value)
-        .replace(/arrow_downward\s*jump to bottom/gi, "")
-        .replace(/jump to bottom/gi, "")
-        .replace(/arrow_downward/gi, "")
-        .replace(/\s+/g, " ")
-        .trim();
+      const sanitizeCaptionText = function (value) {
+        let clean = normalize(value)
+          .replace(/arrow_downward\\s*jump to bottom/gi, "")
+          .replace(/jump to bottom/gi, "")
+          .replace(/arrow_downward/gi, "")
+          .replace(/\\s+/g, " ")
+          .trim();
 
-      const midpoint = Math.floor(clean.length / 2);
-      const firstHalf = clean.slice(0, midpoint).trim();
-      const secondHalf = clean.slice(midpoint).trim();
+        const midpoint = Math.floor(clean.length / 2);
+        const firstHalf = clean.slice(0, midpoint).trim();
+        const secondHalf = clean.slice(midpoint).trim();
 
-      if (
-        firstHalf.length > 24 &&
-        secondHalf.length > 24 &&
-        (firstHalf === secondHalf || clean === `${firstHalf} ${firstHalf}`)
-      ) {
-        clean = firstHalf;
-      }
-
-      return clean;
-    };
-
-    const pushCandidate = (speaker: string, text: string) => {
-      const cleanSpeaker = normalize(speaker || "Speaker");
-      const cleanText = sanitizeCaptionText(text);
-
-      if (!cleanText) {
-        return;
-      }
-
-      const lowered = cleanText.toLowerCase();
-
-      if (ignoredPhrases.some((phrase) => lowered.includes(phrase))) {
-        return;
-      }
-
-      const key = `${cleanSpeaker}::${cleanText}`;
-      const buffer = (window.__meetScribeBuffer ??= []);
-      const seenKeys = (window.__meetScribeSeenKeys ??= {});
-
-      if (seenKeys[key]) {
-        return;
-      }
-
-      seenKeys[key] = true;
-
-      buffer.push({
-        key,
-        speaker: cleanSpeaker,
-        text: cleanText,
-      });
-    };
-
-    const cleanLine = (value: string) =>
-      sanitizeCaptionText(
-        normalize(value)
-        .replace(/^"+|"+$/g, "")
-        .replace(/^'+|'+$/g, ""),
-      );
-
-    const parseLines = (value: string) => {
-      const lines = value
-        .split(/\n+/)
-        .map((line) => cleanLine(line))
-        .filter(Boolean);
-
-      if (lines.length === 0) {
-        return;
-      }
-
-      const colonLine = lines.find((line) => /^[^:]{1,80}:\s.+/.test(line));
-
-      if (colonLine) {
-        const [speaker, ...rest] = colonLine.split(":");
-        pushCandidate(speaker, rest.join(":").trim());
-        return;
-      }
-
-      if (lines.length >= 2 && lines[0].length <= 80) {
-        pushCandidate(lines[0], lines.slice(1).join(" "));
-        return;
-      }
-
-      if (lines.length >= 3 && lines[0].length <= 80) {
-        pushCandidate(lines[0], lines.slice(1).join(" "));
-        return;
-      }
-
-      if (lines.length === 1) {
-        const single = lines[0];
-
-        if (single.split(" ").length >= 4 && single.length <= 220) {
-          pushCandidate("Speaker", single);
+        if (
+          firstHalf.length > 24 &&
+          secondHalf.length > 24 &&
+          (firstHalf === secondHalf || clean === (firstHalf + " " + firstHalf))
+        ) {
+          clean = firstHalf;
         }
-      }
-    };
 
-    const readCaptionRegion = (region: Element) => {
-      const descendants = Array.from(region.querySelectorAll("div, span, p"));
-      const snippets = descendants
-        .filter((element) => element.children.length === 0)
-        .map((element) => cleanLine((element as HTMLElement).innerText || element.textContent || ""))
-        .filter(Boolean)
-        .filter((text) => text.length <= 320)
-        .filter((text, index, array) => array.indexOf(text) === index);
+        return clean;
+      };
 
-      if (snippets.length === 0) {
-        return;
-      }
+      const pushCandidate = function (speaker, text) {
+        const cleanSpeaker = normalize(speaker || "Speaker");
+        const cleanText = sanitizeCaptionText(text);
 
-      if (snippets.length >= 2 && snippets[0].split(" ").length <= 4 && snippets[0].length <= 40) {
-        pushCandidate(snippets[0], snippets.slice(1).join(" "));
-        return;
-      }
-
-      pushCandidate("Speaker", snippets.join(" "));
-    };
-
-    window.__meetScribeScan = () => {
-      const captionRegions = document.querySelectorAll(
-        '[role="region"][aria-label*="Caption"], [role="region"][aria-label*="caption"], [aria-label="Captions"]',
-      );
-
-      captionRegions.forEach((region) => {
-        readCaptionRegion(region);
-      });
-
-      const candidates = document.querySelectorAll(
-        [
-          '[role="region"][aria-label*="Caption"]',
-          '[role="region"][aria-label*="caption"]',
-          '[aria-label="Captions"]',
-          '[aria-live="polite"]',
-          '[aria-live="assertive"]',
-          '[class*="caption"]',
-          '[class*="subtitle"]',
-          '[class*="transcript"]',
-          '[role="listitem"]',
-          '[data-self-name]',
-        ].join(", "),
-      );
-
-      candidates.forEach((element) => {
-        if (!isVisible(element)) {
+        if (!cleanText) {
           return;
         }
 
-        const text = cleanLine((element as HTMLElement).innerText || element.textContent || "");
+        const lowered = cleanText.toLowerCase();
 
-        if (!text || text.length > 500) {
+        if (ignoredPhrases.some(function (phrase) { return lowered.includes(phrase); })) {
           return;
         }
 
-        parseLines(text);
+        const key = cleanSpeaker + "::" + cleanText;
+        const buffer = (window.__meetScribeBuffer ??= []);
+        const seenKeys = (window.__meetScribeSeenKeys ??= {});
+
+        if (seenKeys[key]) {
+          return;
+        }
+
+        seenKeys[key] = true;
+
+        buffer.push({
+          key,
+          speaker: cleanSpeaker,
+          text: cleanText,
+        });
+      };
+
+      const cleanLine = function (value) {
+        return sanitizeCaptionText(
+          normalize(value)
+            .replace(/^"+|"+$/g, "")
+            .replace(/^'+|'+$/g, ""),
+        );
+      };
+
+      const parseLines = function (value) {
+        const lines = value
+          .split(/\\n+/)
+          .map(function (line) { return cleanLine(line); })
+          .filter(Boolean);
+
+        if (lines.length === 0) {
+          return;
+        }
+
+        const colonLine = lines.find(function (line) {
+          return /^[^:]{1,80}:\\s.+/.test(line);
+        });
+
+        if (colonLine) {
+          const parts = colonLine.split(":");
+          const speaker = parts.shift();
+          pushCandidate(speaker, parts.join(":").trim());
+          return;
+        }
+
+        if (lines.length >= 2 && lines[0].length <= 80) {
+          pushCandidate(lines[0], lines.slice(1).join(" "));
+          return;
+        }
+
+        if (lines.length === 1) {
+          const single = lines[0];
+
+          if (single.split(" ").length >= 4 && single.length <= 220) {
+            pushCandidate("Speaker", single);
+          }
+        }
+      };
+
+      const readCaptionRegion = function (region) {
+        const descendants = Array.from(region.querySelectorAll("div, span, p"));
+        const snippets = descendants
+          .filter(function (element) { return element.children.length === 0; })
+          .map(function (element) {
+            return cleanLine(element.innerText || element.textContent || "");
+          })
+          .filter(Boolean)
+          .filter(function (text) { return text.length <= 320; })
+          .filter(function (text, index, array) { return array.indexOf(text) === index; });
+
+        if (snippets.length === 0) {
+          return;
+        }
+
+        if (snippets.length >= 2 && snippets[0].split(" ").length <= 4 && snippets[0].length <= 40) {
+          pushCandidate(snippets[0], snippets.slice(1).join(" "));
+          return;
+        }
+
+        pushCandidate("Speaker", snippets.join(" "));
+      };
+
+      window.__meetScribeScan = function () {
+        const captionRegions = document.querySelectorAll(
+          '[role="region"][aria-label*="Caption"], [role="region"][aria-label*="caption"], [aria-label="Captions"]',
+        );
+
+        captionRegions.forEach(function (region) {
+          readCaptionRegion(region);
+        });
+
+        const candidates = document.querySelectorAll(
+          [
+            '[role="region"][aria-label*="Caption"]',
+            '[role="region"][aria-label*="caption"]',
+            '[aria-label="Captions"]',
+            '[aria-live="polite"]',
+            '[aria-live="assertive"]',
+            '[class*="caption"]',
+            '[class*="subtitle"]',
+            '[class*="transcript"]',
+            '[role="listitem"]',
+            '[data-self-name]',
+          ].join(", "),
+        );
+
+        candidates.forEach(function (element) {
+          if (!isVisible(element)) {
+            return;
+          }
+
+          const text = cleanLine(element.innerText || element.textContent || "");
+
+          if (!text || text.length > 500) {
+            return;
+          }
+
+          parseLines(text);
+        });
+      };
+
+      window.__meetScribeScan();
+
+      const observer = new MutationObserver(function () {
+        if (window.__meetScribeScan) {
+          window.__meetScribeScan();
+        }
       });
-    };
 
-    window.__meetScribeScan();
-
-    const observer = new MutationObserver(() => {
-      window.__meetScribeScan?.();
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-  });
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    })();
+  `);
 }
 
 async function readBufferedCaptions(page: Page): Promise<CapturedCaption[]> {
