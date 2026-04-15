@@ -985,8 +985,9 @@ export async function captureGoogleMeetCaptions(
 
         if (inspection) {
           const sampleText = inspection.samples.map((item) => item.text).join(" | ") || "none";
+          const buttonText = inspection.buttons.join(" | ") || "none";
           await debug(
-            `Caption surface check: candidates=${inspection.candidateCount} samples=${sampleText}`,
+            `Caption surface check: candidates=${inspection.candidateCount} samples=${sampleText} buttons=${buttonText}`,
           );
         }
 
@@ -1010,8 +1011,9 @@ export async function captureGoogleMeetCaptions(
       const inspection = await inspectCaptionSurface().catch(() => null);
       if (inspection) {
         const sampleText = inspection.samples.map((item) => item.text).join(" | ") || "none";
+        const buttonText = inspection.buttons.join(" | ") || "none";
         await debug(
-          `No captions captured. Final inspection: candidates=${inspection.candidateCount} samples=${sampleText}`,
+          `No captions captured. Final inspection: candidates=${inspection.candidateCount} samples=${sampleText} buttons=${buttonText}`,
         );
       }
       throw new Error(

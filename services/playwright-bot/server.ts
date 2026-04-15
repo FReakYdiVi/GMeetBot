@@ -84,6 +84,9 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    const captions: CapturedCaption[] = [];
+    const debugLog: string[] = [];
+
     try {
       const body = await readJsonBody(request);
       const meetUrl = body.meetUrl?.trim();
@@ -92,9 +95,6 @@ const server = createServer(async (request, response) => {
         sendJson(response, 400, { error: "Please provide a valid Google Meet link." });
         return;
       }
-
-      const captions: CapturedCaption[] = [];
-      const debugLog: string[] = [];
 
       await captureGoogleMeetCaptions(
         meetUrl,
@@ -115,6 +115,8 @@ const server = createServer(async (request, response) => {
     } catch (error) {
       sendJson(response, 500, {
         ok: false,
+        captions,
+        debugLog,
         error: error instanceof Error ? error.message : "Unknown Playwright bot error.",
       });
       return;
