@@ -421,30 +421,94 @@ async function joinMeeting(page: Page) {
   }
 }
 
-async function waitUntilAdmitted(page: Page) {
-  const start = Date.now();
+async function inspectMeetingState(page: Page) {
+  const buttonLabels = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll("button"))
+      .map((button) => {
+        const htmlButton = button as HTMLButtonElement;
+        return (
+          htmlButton.getAttribute("aria-label") ||
+          htmlButton.textContent ||
+          ""
+        )
+          .replace(/\s+/g, " ")
+          .trim();
+      })
+      .filter(Boolean)
+      .slice(0, 16);
+  }).catch(() => [] as string[]);
 
-  while (Date.now() - start < 60_000) {
-    const leaveVisible = await clicklessButtonExists(page, [
+  const admittedSignals = await Promise.all([
+    clicklessButtonExists(page, [
       /leave call/i,
       /end call/i,
       /captions/i,
       /turn on captions/i,
       /turn off captions/i,
-    ]);
+      /present now/i,
+      /raise hand/i,
+      /show everyone/i,
+      /chat with everyone/i,
+      /more options/i,
+      /activities/i,
+    ]),
+    page.locator('[role="region"][aria-label*="Caption"]').first().isVisible().catch(() => false),
+    page.locator('[aria-label="Captions"]').first().isVisible().catch(() => false),
+    page.locator('[data-self-name]').first().isVisible().catch(() => false),
+    page.locator("text=/you joined|you are in the call|meeting details|chat with everyone/i")
+      .first()
+      .isVisible()
+      .catch(() => false),
+  ]);
 
-    if (leaveVisible) {
+  const waitingRoomVisible = await page
+    .locator(
+      "text=/asking to join|someone in the call should let you in soon|you'll be able to join in just a moment|waiting for someone to let you in/i",
+    )
+    .first()
+    .isVisible()
+    .catch(() => false);
+
+  const blockedVisible = await page
+    .locator("text=/can't join this call|denied|removed from the call/i")
+    .first()
+    .isVisible()
+    .catch(() => false);
+
+  return {
+    buttonLabels,
+    admitted: admittedSignals.some(Boolean),
+    waitingRoomVisible,
+    blockedVisible,
+    url: page.url(),
+  };
+}
+
+async function waitUntilAdmitted(
+  page: Page,
+  onDebug?: (message: string) => void | Promise<void>,
+) {
+  const start = Date.now();
+  let lastDebugAt = 0;
+
+  while (Date.now() - start < 60_000) {
+    const state = await inspectMeetingState(page);
+
+    if (state.admitted) {
       return;
     }
 
-    const blocked = await page
-      .locator("text=/can't join this call|denied|removed from the call/i")
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    if (blocked) {
+    if (state.blockedVisible) {
       throw new Error("The bot could not enter the meeting.");
+    }
+
+    if (onDebug && Date.now() - lastDebugAt > 8_000) {
+      const stage = state.waitingRoomVisible ? "waiting-room" : "unknown";
+      const labels = state.buttonLabels.join(" | ") || "none";
+      await onDebug(
+        `Admission check: stage=${stage} url=${state.url} buttons=${labels}`,
+      );
+      lastDebugAt = Date.now();
     }
 
     await wait(2_000);
@@ -881,7 +945,7 @@ export async function captureGoogleMeetCaptions(
     await debug("Pre-join device setup attempted.");
     await joinMeeting(page);
     await debug("Join button clicked.");
-    await waitUntilAdmitted(page);
+    await waitUntilAdmitted(page, debug);
     await debug("Bot admitted into meeting.");
     await disableMicAndCamera(page).catch(() => null);
     const captionsConfirmed = await enableCaptions(page);
